@@ -1,0 +1,26 @@
+trigger:
+- main
+
+resources:
+- repo: self
+
+variables:
+  awsRegion: 'us-west-2'
+  lambdaFunctionName: 'your-lambda-function-name'
+  artifactPath: 'path/to/your/artifact.zip'
+
+stages:
+- stage: UpdateLambda
+  jobs:
+  - job: UpdateLambdaFunction
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: AmazonWebServices.aws-vsts-tools.LambdaNETCoreDeploy.LambdaNETCoreDeploy@1
+      inputs:
+        awsCredentials: 'YourAWSServiceConnectionName'
+        regionName: '$(awsRegion)'
+        command: 'updateFunctionCode'
+        functionHandler: 'your.handler'
+        functionName: '$(lambdaFunctionName)'
+        package: '$(artifactPath)'
