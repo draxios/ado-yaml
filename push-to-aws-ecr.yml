@@ -1,0 +1,34 @@
+trigger:
+- main
+
+resources:
+- repo: self
+
+variables:
+  awsRegion: 'us-west-2'
+  ecrRepository: 'your-ecr-repository-name'
+  dockerfilePath: 'Dockerfile'
+  imageTag: 'latest'
+
+stages:
+- stage: BuildAndPush
+  jobs:
+  - job: BuildAndPushImage
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: Docker@2
+      inputs:
+        command: 'build'
+        dockerfile: '$(dockerfilePath)'
+        tags: |
+          $(imageTag)
+
+    - task: AmazonWebServices.aws-vsts-tools.ECRPushImage.ECRPushImage@1
+      inputs:
+        awsCredentials: 'YourAWSServiceConnectionName'
+        regionName: '$(awsRegion)'
+        repositoryName: '$(ecrRepository)'
+        imageSource: 'imagename'
+        sourceImageName: 'your-image-name'
+        sourceImageTag: '$(imageTag)'
