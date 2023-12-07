@@ -1,0 +1,28 @@
+trigger:
+- main
+
+resources:
+- repo: self
+
+variables:
+  awsRegion: 'us-west-2'
+  ecrRepository: 'your-ecr-repository-name'
+  clusterName: 'your-ecs-cluster-name'
+  serviceName: 'your-ecs-service-name'
+  imageTag: 'latest'
+
+stages:
+- stage: UpdateECS
+  jobs:
+  - job: UpdateECSService
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: AmazonWebServices.aws-vsts-tools.ECSTaskDefinitionUpdate.ECSTaskDefinitionUpdate@1
+      inputs:
+        awsCredentials: 'YourAWSServiceConnectionName'
+        regionName: '$(awsRegion)'
+        clusterName: '$(clusterName)'
+        serviceName: '$(serviceName)'
+        imageUri: '$(ecrRepository):$(imageTag)'
+        containerName: 'your-container-name'
