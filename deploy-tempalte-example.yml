@@ -1,0 +1,35 @@
+trigger:
+- main
+
+pool:
+  name: [Your Build Agent Pool Name]
+
+stages:
+- stage: Build
+  jobs:
+  - job: Build
+    steps:
+    - template: build-template.yml  # Template for build
+
+- template: deployment-template.yml
+  parameters:
+    environment: 'Dev'
+    deploymentScriptPath: 'scripts/dev-deploy.sh'
+
+- ${{ if eq(variables['Build.SourceBranch'], 'refs/heads/main') }}:
+  - template: deployment-template.yml
+    parameters:
+      environment: 'QA'
+      deploymentScriptPath: 'scripts/qa-deploy.sh'
+
+- ${{ if in(variables['Build.SourceBranch'], 'refs/heads/uat', 'refs/heads/main') }}:
+  - template: deployment-template.yml
+    parameters:
+      environment: 'UAT'
+      deploymentScriptPath: 'scripts/uat-deploy.sh'
+
+- ${{ if eq(variables['Build.SourceBranch'], 'refs/heads/main') }}:
+  - template: deployment-template.yml
+    parameters:
+      environment: 'Prod'
+      deploymentScriptPath: 'scripts/prod-deploy.sh'
