@@ -1,0 +1,18 @@
+parameters:
+- name: environment
+  type: string
+- name: deploymentScriptPath
+  default: ''
+  type: string
+
+stages:
+- stage: ${{ parameters.environment }}
+  jobs:
+  - job: Deploy
+    pool:
+      name: [Your Build Agent Pool Name]
+    steps:
+    - script: |
+        echo Deploying to ${{ parameters.environment }}
+        [Path to your deployment script or command] ${{ parameters.deploymentScriptPath }}
+      displayName: 'Deploy to ${{ parameters.environment }}'
