@@ -1,0 +1,30 @@
+- stage: Deploy
+  jobs:
+  - deployment: DeployApplication
+    # ... deployment steps ...
+    - script: |
+        # Run health checks
+        # Example: Invoke-WebRequest -Uri http://your-application/health
+        # Check the response and determine the health status
+      displayName: 'Run Health Checks'
+      continueOnError: true
+    - powershell: |
+        if ($LastExitCode -ne 0) {
+          # Health check failed, trigger rollback
+          $url = "$(System.TeamFoundationCollectionUri)$(System.TeamProject)/_apis/build/builds?api-version=6.0"
+          $body = @{
+            definition = @{
+              id = <ROLLBACK_PIPELINE_DEFINITION_ID>
+            }
+            parameters = (ConvertTo-Json @{
+              rollbackVersion = '<LAST_SUCCESSFUL_VERSION>'
+            })
+          }
+          $PAT = '<YOUR_PERSONAL_ACCESS_TOKEN>'
+          $base64AuthInfo = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(":$($PAT)"))
+          Invoke-RestMethod -Uri $url -Method Post -Body ($body | ConvertTo-Json) -Headers @{Authorization=("Basic {0}" -f $base64AuthInfo)}
+          Write-Host "Rollback triggered."
+        }
+      displayName: 'Trigger Rollback if Health Check Fails'
+      condition: failed()
+      
