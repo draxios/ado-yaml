@@ -1,0 +1,65 @@
+parameters:
+  - name: siteNames
+    type: string
+    default: ''
+  - name: appPoolNames
+    type: string
+    default: ''
+
+steps:
+- powershell: |
+    param(
+        [string[]]$siteNames,  # Array of IIS site names to check
+        [string[]]$appPoolNames  # Array of AppPool names to check
+    )
+
+    function Check-SiteStatus {
+        param([string]$siteName)
+
+        $site = Get-WebSite -Name $siteName
+        if ($site -and $site.State -eq 'Started') {
+            Write-Host "Site '$siteName' is running."
+        } else {
+            Write-Host "Site '$siteName' is not running."
+            $global:healthy = $false
+        }
+    }
+
+    function Check-AppPoolStatus {
+        param([string]$appPoolName)
+
+        $appPool = Get-IISAppPool -Name $appPoolName
+        if ($appPool -and $appPool.State -eq 'Started') {
+            Write-Host "AppPool '$appPoolName' is running."
+        } else {
+            Write-Host "AppPool '$appPoolName' is not running."
+            $global:healthy = $false
+        }
+    }
+
+    # Initial status is healthy
+    $global:healthy = $true
+
+    # Check the status of each site
+    foreach ($site in $siteNames) {
+        Check-SiteStatus -siteName $site
+    }
+
+    # Check the status of each app pool
+    foreach ($appPool in $appPoolNames) {
+             Check-AppPoolStatus -appPoolName $appPool
+    }
+
+    # Return the health status
+    if ($global:healthy) {
+        Write-Host "Health Check: PASSED"
+        exit 0  # Success exit code
+    } else {
+        Write-Host "Health Check: FAILED"
+        exit 1  # Error exit code
+    }
+
+  displayName: 'IIS Health Check'
+  env:
+    siteNames: ${{ parameters.siteNames }}
+    appPoolNames: ${{ parameters.appPoolNames }}
