@@ -1,0 +1,51 @@
+terraform {
+  backend "s3" {
+    bucket         = "your-terraform-state-bucket"
+    key            = "path/to/your/state/file"
+    region         = "aws-region"
+    dynamodb_table = "your-dynamodb-lock-table"
+    encrypt        = true
+  }
+}
+
+
+trigger:
+- main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  terraformVersion: '1.0.0' # Specify the Terraform version here
+  s3Bucket: 'your-terraform-state-bucket' # Your S3 Bucket for Terraform state
+  dynamoDbTable: 'your-dynamodb-lock-table' # Your DynamoDB table for state locking
+  awsRegion: 'aws-region' # AWS Region
+  terraformDirectory: 'path/to/your/terraform/files' # Path to your Terraform files in the repo
+
+stages:
+- stage: Terraform
+  jobs:
+  - job: TerraformJob
+    steps:
+    - checkout: self
+      persistCredentials: true
+
+    - task: TerraformInstaller@0
+      displayName: 'Install Terraform'
+      inputs:
+        terraformVersion: $(terraformVersion)
+
+    - script: |
+        terraform init -backend-config="bucket=$(s3Bucket)" -backend-config="key=terraform/state" -backend-config="region=$(awsRegion)" -backend-config="dynamodb_table=$(dynamoDbTable)"
+      displayName: 'Terraform Init'
+      workingDirectory: $(terraformDirectory)
+
+    - script: |
+        terraform plan -out=tfplan
+      displayName: 'Terraform Plan'
+      workingDirectory: $(terraformDirectory)
+
+    - script: |
+        terraform apply -auto-approve tfplan
+      displayName: 'Terraform Apply'
+      workingDirectory: $(terraformDirectory)
