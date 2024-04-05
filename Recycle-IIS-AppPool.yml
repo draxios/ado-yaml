@@ -1,0 +1,25 @@
+steps:
+  - task: PowerShell@2
+    displayName: 'Recycle IIS AppPool - ${{ parameters.appPool }}'
+    inputs:
+      targetType: 'inline'
+      script: |
+        $user = "$(DeploymentAccount)"; $pWord = ConvertTo-SecureString -String "$(DeploymentPassword)" -AsPlainText -Force
+        $credential = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $user, $pWord
+        $remoteTargets = "${{ parameters.serverHosts }}"
+        $errorsOccurred = $false
+        foreach ($remoteTarget in $remoteTargets.Split(",") ) {
+            try {
+                Invoke-Command -ComputerName $remoteTarget -ScriptBlock { Import-Module IISAdministration; (Get-IISAppPool "${{ parameters.appPool }}").Recycle() } -Credential $credential -ErrorAction Stop
+            } catch {
+                Write-Error "Failed to recycle app pool on $remoteTarget. Error: $_"
+                $errorsOccurred = $true
+            }
+        }
+        if ($errorsOccurred) {
+            Write-Host "Completed with errors. See above."
+            # Optionally, you could set an exit code here if you want to fail the job explicitly
+            # exit 1
+        } else {
+            Write-Host "Completed successfully."
+        }
