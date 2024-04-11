@@ -9,7 +9,6 @@ pool:
 variables:
   group: 'my-vars'
 
-
 steps:
 - script: |
     echo "Installing AWS CLI..."
