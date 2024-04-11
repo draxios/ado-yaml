@@ -6,6 +6,10 @@ trigger:
 pool:
   vmImage: 'ubuntu-latest'
 
+variables:
+  group: 'my-vars'
+
+
 steps:
 - script: |
     echo "Installing AWS CLI..."
