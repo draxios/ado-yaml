@@ -9,40 +9,71 @@ pool:
 variables:
   group: 'my-vars'
 
-steps:
-- script: |
-    echo "Installing AWS CLI..."
-    curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-    unzip awscliv2.zip
-    sudo ./aws/install
-  displayName: 'Install AWS CLI'
+stages:
+  - stage: Build
+    jobs:
+      - job: BuildJob
+        steps:
+        - script: |
+            echo "Installing AWS CLI..."
+            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+            unzip awscliv2.zip
+            sudo ./aws/install
+          displayName: 'Install AWS CLI'
+        
+        - script: |
+            echo "Installing Node.js..."
+            curl -sL https://deb.nodesource.com/setup_14.x | sudo -E bash -
+            sudo apt-get install -y nodejs
+          displayName: 'Install Node.js'
+        
+        - script: |
+            echo "Installing project dependencies..."
+            npm install
+          workingDirectory: $(Build.SourcesDirectory)
+          displayName: 'Install dependencies'
+        
+        - script: |
+            echo "Compiling TypeScript..."
+            npm run build
+          workingDirectory: $(Build.SourcesDirectory)
+          displayName: 'Build TypeScript Project'
+          
+        - script: |
+            echo "Zipping build output..."
+            cd $(Build.SourcesDirectory)/dist
+            zip -r $(Build.ArtifactStagingDirectory)/function.zip .
+          displayName: 'Zip build output'
+        
+        - task: PublishBuildArtifacts@1
+          inputs:
+            PathtoPublish: '$(Build.ArtifactStagingDirectory)/function.zip'
+            ArtifactName: 'lambdaFunction'
+            publishLocation: 'container'
+          displayName: 'Publish Artifact'
 
-- script: |
-    echo "Installing Node.js..."
-    curl -sL https://deb.nodesource.com/setup_14.x | sudo -E bash -
-    sudo apt-get install -y nodejs
-  displayName: 'Install Node.js'
+  - stage: Deploy
+    dependsOn: Build
+    jobs:
+      - job: DeployJob
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - task: DownloadBuildArtifacts@0
+            inputs:
+              buildType: 'current'
+              downloadType: 'single'
+              artifactName: 'lambdaFunction'
+              downloadPath: '$(System.ArtifactsDirectory)'
 
-- script: |
-    echo "Installing project dependencies..."
-    npm install
-  workingDirectory: $(Build.SourcesDirectory)
-  displayName: 'Install dependencies'
+          - script: |
+              echo "Configuring AWS credentials..."
+              aws configure set aws_access_key_id $(AWS_ACCESS_KEY_ID)
+              aws configure set aws_secret_access_key $(AWS_SECRET_ACCESS_KEY)
+              aws configure set default.region $(AWS_REGION)
+            displayName: 'Configure AWS CLI'
 
-- script: |
-    echo "Compiling TypeScript..."
-    npm run build
-  workingDirectory: $(Build.SourcesDirectory)
-  displayName: 'Build TypeScript Project'
-
-- script: |
-    echo "Configuring AWS credentials..."
-    aws configure set aws_access_key_id $(AWS_ACCESS_KEY_ID)
-    aws configure set aws_secret_access_key $(AWS_SECRET_ACCESS_KEY)
-    aws configure set default.region $(AWS_REGION)
-  displayName: 'Configure AWS CLI'
-
-- script: |
-    echo "Deploying to AWS Lambda..."
-    aws lambda update-function-code --function-name yourLambdaFunctionName --zip-file fileb://path/to/your/function.zip
-  displayName: 'Deploy Lambda Function'
+          - script: |
+              echo "Deploying to AWS Lambda..."
+              aws lambda update-function-code --function-name yourLambdaFunctionName --zip-file fileb://$(System.ArtifactsDirectory)/lambdaFunction/function.zip
+            displayName: 'Deploy Lambda Function'
