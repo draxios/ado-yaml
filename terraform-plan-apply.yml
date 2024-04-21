@@ -1,0 +1,73 @@
+trigger:
+  branches:
+    include:
+    - main
+
+pool:
+  vmImage: 'windows-latest'  # Changed to Windows image for PowerShell
+
+variables:
+  - name: TFE_TOKEN
+    value: $(TFE_TOKEN)  # Ensure this is set in your pipeline variables and marked as secret
+
+stages:
+  - stage: Plan
+    displayName: "Terraform Plan"
+    jobs:
+      - job: TerraformPlan
+        steps:
+          - powershell: |
+              $body = @{
+                data = @{
+                  attributes = @{
+                    message = "Triggered from Azure DevOps"
+                    "is-destroy" = $false
+                  }
+                  type = "runs"
+                }
+              }
+              $json = $body | ConvertTo-Json -Depth 3
+              $response = Invoke-RestMethod -Uri "https://app.terraform.io/api/v2/workspaces/WORKSPACE_ID/runs" -Method Post -Body $json -ContentType "application/vnd.api+json" -Headers @{Authorization = "Bearer $(TFE_TOKEN)"}
+              Write-Host "Response from TFE Plan API:"
+              Write-Host $response
+              $runId = $response.data.id
+              Write-Host "Captured Run ID: $runId"
+              $runId | Out-File -FilePath run_id.txt
+            displayName: 'Trigger Terraform Plan and Capture Run ID'
+
+          - task: PublishBuildArtifacts@1
+            inputs:
+              PathtoPublish: 'run_id.txt'
+              ArtifactName: 'run_id'
+              publishLocation: 'container'
+            displayName: 'Publish Run ID'
+
+  - stage: Apply
+    displayName: "Terraform Apply"
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    jobs:
+      - job: TerraformApply
+        steps:
+          - task: DownloadBuildArtifacts@0
+            inputs:
+              buildType: 'current'
+              downloadType: 'single'
+              artifactName: 'run_id'
+              downloadPath: '$(System.ArtifactsDirectory)'
+
+          - powershell: |
+              $runId = Get-Content "$(System.ArtifactsDirectory)\run_id\run_id.txt"
+              Write-Host "Using Run ID: $runId for Terraform Apply..."
+              $body = @{
+                data = @{
+                  attributes = @{
+                    message = "Apply confirmed from Azure DevOps"
+                  }
+                  type = "applies"
+                }
+              }
+              $json = $body | ConvertTo-Json -Depth 3
+              $response = Invoke-RestMethod -Uri "https://app.terraform.io/api/v2/runs/$runId/actions/apply" -Method Post -Body $json -ContentType "application/vnd.api+json" -Headers @{Authorization = "Bearer $(TFE_TOKEN)"}
+              Write-Host "Response from TFE Apply API:"
+              Write-Host $response
+            displayName: 'Trigger Terraform Apply'
