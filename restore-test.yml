@@ -1,0 +1,23 @@
+trigger:
+- main
+
+pool:
+  vmImage: 'windows-latest'
+
+steps:
+- task: DotNetCoreCLI@2
+  inputs:
+    command: 'restore'
+    projects: '**/*.csproj'
+    feedsToUse: 'select'
+
+- script: |
+    dotnet list $(Build.SourcesDirectory)/YourProjectFile.csproj package --vulnerable > vulnerabilityReport.txt
+    if grep -q 'has the following vulnerable packages' vulnerabilityReport.txt; then
+      echo "Vulnerabilities found, failing the build."
+      exit 1
+    else
+      echo "No vulnerabilities found."
+    fi
+  displayName: 'Check for Vulnerable Packages'
+  failOnStderr: false
