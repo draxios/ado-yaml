@@ -1,0 +1,49 @@
+trigger:
+  branches:
+    include:
+    - main
+
+parameters:
+  - name: organization
+    displayName: 'Azure DevOps Organization'
+    type: string
+  - name: project
+    displayName: 'Azure DevOps Project'
+    type: string
+  - name: repo
+    displayName: 'Repository Name'
+    type: string
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  - group: git-auth-group  # Assumes a variable group named 'git-auth-group' that includes 'GitPAT'
+
+steps:
+- checkout: none  # Disable automatic checkout
+- script: |
+    echo "Starting repository clone..."
+    # Cloning with PAT injected directly into the URL
+    git clone https://$(GitPAT)@dev.azure.com/${{ parameters.organization }}/${{ parameters.project }}/_git/${{ parameters.repo }}
+    cd ${{ parameters.repo }}
+    echo "Repository cloned successfully."
+    echo "Scanning for non-ASCII characters..."
+    # Scan for non-ASCII characters
+    grep --color='auto' -P -n "[\x80-\xFF]" *.cs *.ts > non-ascii-results.txt
+    if [ -s non-ascii-results.txt ]; then
+        echo "Non-ASCII characters found:"
+        cat non-ascii-results.txt
+    else
+        echo "No Non-ASCII characters found."
+    fi
+    echo "Scanning for Unicode directional control characters..."
+    # Scan for Unicode directional control characters
+    grep --color='auto' -P -n "\u202E|\u200F|\u200E" *.cs *.ts > directionality-results.txt
+    if [ -s directionality-results.txt ]; then
+        echo "Directional control characters found:"
+        cat directionality-results.txt
+    else
+        echo "No directional control characters found."
+    fi
+  displayName: 'Scan Source Code for Special Unicode Characters'
