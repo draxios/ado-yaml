@@ -1,0 +1,46 @@
+trigger:
+  branches:
+    include:
+      - main  # Trigger the pipeline on changes to the main branch
+
+pool:
+  vmImage: 'windows-latest'  # Define the VM image for PowerShell compatibility
+
+steps:
+- checkout: self
+- checkout: git://YourOrg/your-naming-conventions-repo.git  # Checkout the naming conventions repository
+
+- powershell: |
+    Write-Host "Checking naming convention for the new project/repository..."
+  displayName: 'Initialize Naming Convention Check'
+
+- task: PowerShell@2
+  inputs:
+    targetType: 'inline'
+    script: |
+      # Extract the requested project/repo name passed as a pipeline variable
+      $requestedName = "$(requestedName)"
+
+      # Load the naming standard pattern from the naming standards repository
+      $namingStandard = Get-Content "$(Build.SourcesDirectory)/your-naming-conventions-repo/naming-standard.json" | ConvertFrom-Json
+
+      # Validate the requested name against the kebab-case standard and length
+      if ($requestedName -match $namingStandard.pattern -and $requestedName.Length -le $namingStandard.maxLength) {
+        Write-Host "Naming convention check passed."
+      } else {
+        Write-Host "Error: Naming convention check failed."
+        Write-Host "The requested name '$requestedName' does not conform to the standard or exceeds the maximum length."
+        exit 1  # Fail the pipeline if the naming convention is not met
+  displayName: 'Validate Naming Convention'
+
+- powershell: |
+    Write-Host "Continuing with pipeline tasks..."
+  displayName: 'Continue Pipeline'
+  condition: succeeded()  # This step only runs if the previous step (naming check) succeeds
+
+----------------
+
+{
+  "pattern": "^[a-z0-9]+(?:-[a-z0-9]+){0,5}$",
+  "maxLength": 54
+}
