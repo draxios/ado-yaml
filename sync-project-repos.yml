@@ -1,0 +1,66 @@
+trigger: none
+
+schedules:
+  - cron: "0 0 * * *"  # Runs every day at midnight
+    displayName: Daily sync between prod and poc
+    branches:
+      include:
+        - main  # Change this to the branch that should trigger the schedule
+    always: true
+
+pool:
+  vmImage: 'windows-latest'
+
+steps:
+  - checkout: none
+
+  - script: |
+      # Ensure Git is installed
+      if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+          Write-Host "Git is not installed. Installing Git..."
+          choco install git -y
+      } else {
+          Write-Host "Git is already installed."
+      }
+    displayName: 'Ensure Git is Installed'
+    env:
+      SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+
+  - script: |
+      # PowerShell script to sync repositories from prod to poc
+      
+      # Set the variables
+      $ProdOrganization = "https://dev.azure.com/your-prod-org"
+      $PocOrganization = "https://dev.azure.com/your-poc-org"
+      $ProdProject = "ProdProjectName"
+      $PocProject = "PocProjectName"
+      $PAT = "$(System.AccessToken)"
+      
+      # Encode PAT for authentication
+      $AuthHeader = @{Authorization = "Basic " + [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(":$($PAT)"))}
+      
+      # Get the list of repositories from the prod project
+      $ProdRepos = Invoke-RestMethod -Uri "$ProdOrganization/$ProdProject/_apis/git/repositories?api-version=6.0" -Headers $AuthHeader
+      
+      foreach ($Repo in $ProdRepos.value) {
+          $RepoName = $Repo.name
+          
+          # Check if the repo exists in the poc project
+          $PocRepo = Invoke-RestMethod -Uri "$PocOrganization/$PocProject/_apis/git/repositories/$RepoName?api-version=6.0" -Headers $AuthHeader -Method Get -ErrorAction SilentlyContinue
+          
+          if ($null -eq $PocRepo) {
+              # If the repo doesn't exist in the poc project, create it
+              $CreateRepoBody = @{name = $RepoName} | ConvertTo-Json
+              Invoke-RestMethod -Uri "$PocOrganization/$PocProject/_apis/git/repositories?api-version=6.0" -Headers $AuthHeader -Method Post -Body $CreateRepoBody -ContentType "application/json"
+          }
+          
+          # Mirror the prod repo to the poc repo
+          git clone --mirror "$ProdOrganization/$ProdProject/_git/$RepoName" "$RepoName"
+          cd $RepoName
+          git push --mirror "$PocOrganization/$PocProject/_git/$RepoName"
+          cd ..
+          Remove-Item -Recurse -Force $RepoName
+      }
+    displayName: 'Sync Repositories from Prod to Poc'
+    env:
+      SYSTEM_ACCESSTOKEN: $(System.AccessToken)
